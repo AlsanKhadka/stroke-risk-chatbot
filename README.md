@@ -16,7 +16,7 @@ Developed as part of the **CET140 Specialist Project** — *University of Sunder
 1. Open **`stroke_risk_prediction.ipynb`** in Google Colab.  
 2. Run all cells — it trains the model and launches the chatbot via **ngrok**.
 
-🧠 Methodology
+## 🧠 Methodology
 
 - Dataset: Kaggle Stroke Prediction Dataset
 
@@ -31,7 +31,7 @@ Developed as part of the **CET140 Specialist Project** — *University of Sunder
 - Integration: Deployed via Flask chatbot interface
 
 
-🌟 Future Enhancements
+## 🌟 Future Enhancements
 
 - Voice-based interaction
 
