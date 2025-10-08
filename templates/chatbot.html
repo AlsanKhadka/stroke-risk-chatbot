@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI Stroke Risk Chatbot</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<h2 style="text-align:center; color:#2b6cb0; font-family:Arial; margin-top:15px; margin-bottom:10px;">
+  🧠 Stroke Risk Prediction Chatbot
+</h2>
+
+<div class="chat-container">
+  <div id="chatbox"></div>
+  <input type="text" id="userInput" placeholder="Type your answer..." autofocus>
+  <button id="sendBtn">Send</button>
+</div>
+
+<script>
+const chatbox = document.getElementById('chatbox');
+const input = document.getElementById('userInput');
+const sendBtn = document.getElementById('sendBtn');
+botMessage("👋 Hello! ✅ Let's begin your stroke risk assessment.");
+const questions = [
+  { key: 'age', text: 'How old are you?', type: 'number', min: 1, max: 120 },
+  { key: 'avg_glucose_level', text: 'What is your average glucose level (mg/dL)?', type: 'number', min: 40, max: 400 },
+  { key: 'bmi', text: 'What is your BMI?', type: 'number', min: 10, max: 60 },
+  { key: 'hypertension', text: 'Do you have hypertension? (Yes / No)', type: 'yesno' },
+  { key: 'heart_disease', text: 'Do you have heart disease? (Yes / No)', type: 'yesno' },
+  { key: 'gender', text: 'What is your gender? (Male / Female / Other)', type: 'gender' },
+  { key: 'ever_married', text: 'Have you ever been married? (Yes / No)', type: 'yesno' },
+  { key: 'Residence_type', text: 'Do you live in a Rural or Urban area?', type: 'category', options: ['rural','urban'] },
+  { key: 'work_type', text: 'Work type? (Govt, Private, Self, Never)', type: 'category', options: ['govt','private','self','never'] },
+  { key: 'smoking_status', text: 'Smoking habit? (Never, Formerly, Smokes)', type: 'category', options: ['never','formerly','smokes'] }
+];
+
+let answers = {};
+let current = 0;
+let retryMode = false;
+let ended = false;
+
+function botMessage(msg) {
+  const div = document.createElement('div');
+  div.className = 'bot';
+  div.textContent = msg;
+  chatbox.appendChild(div);
+  chatbox.scrollTop = chatbox.scrollHeight;
+}
+
+function userMessage(msg) {
+  const div = document.createElement('div');
+  div.className = 'user';
+  div.textContent = msg;
+  chatbox.appendChild(div);
+  chatbox.scrollTop = chatbox.scrollHeight;
+}
+
+function getErrorMessage(q) {
+  if (q.key === 'age') return "⚠️ Invalid input. Age should be between 1 and 120.";
+  if (q.key === 'avg_glucose_level') return "⚠️ Invalid input. Glucose should be between 40 and 400 mg/dL.";
+  if (q.key === 'bmi') return "⚠️ Invalid input. BMI should be between 10 and 60.";
+  if (q.type === 'yesno') return "⚠️ Please answer Yes or No.";
+  if (q.type === 'gender') return "⚠️ Please answer Male, Female, or Other.";
+  if (q.type === 'category') return "⚠️ Please choose one of: " + q.options.join(', ') + ".";
+  return "⚠️ Invalid input. Please try again.";
+}
+
+function validateInput(value, q) {
+  const v = value.toLowerCase().trim();
+  if (q.type === 'number') {
+    if (!/^[0-9]+(\.[0-9]+)?$/.test(v)) return false;
+    const n = parseFloat(v);
+    return n >= q.min && n <= q.max;
+  } else if (q.type === 'yesno') {
+    return v === 'yes' || v === 'no';
+  } else if (q.type === 'gender') {
+    return ['male','female','other'].includes(v);
+  } else if (q.type === 'category') {
+    return q.options.includes(v);
+  }
+  return false;
+}
+
+function askQuestion() {
+  if (current < questions.length) {
+    botMessage(questions[current].text);
+  } else {
+    botMessage("⏳ Analyzing your data...");
+    sendToServer();
+  }
+}
+
+sendBtn.onclick = () => {
+  const val = input.value.trim();
+  if (!val) return;
+  userMessage(val);
+
+  // If ended, re-offer restart prompt
+  if (ended) {
+    botMessage("Would you like to try again? (Yes / No)");
+    retryMode = true;
+    ended = false;
+    input.value = '';
+    return;
+  }
+
+  // Handle retry mode
+  if (retryMode) {
+    handleRetry(val.toLowerCase());
+    input.value = '';
+    return;
+  }
+
+  const q = questions[current];
+  if (!validateInput(val, q)) {
+    botMessage(getErrorMessage(q));
+    input.value = '';
+    return;
+  }
+
+  const v = val.toLowerCase();
+  input.value = '';
+  const key = q.key;
+
+  if (q.type === 'yesno') {
+    answers[key] = v === 'yes' ? 1 : 0;
+  } else if (q.type === 'gender') {
+    answers[key] = v === 'male' ? 1 : (v === 'female' ? 0 : 2);
+  } else if (key === 'work_type') {
+    answers['work_type_Govt_job'] = v === 'govt' ? 1 : 0;
+    answers['work_type_Never_worked'] = v === 'never' ? 1 : 0;
+    answers['work_type_Private'] = v === 'private' ? 1 : 0;
+    answers['work_type_Self_employed'] = v === 'self' ? 1 : 0;
+  } else if (key === 'smoking_status') {
+    answers['smoking_status_formerly_smoked'] = v === 'formerly' ? 1 : 0;
+    answers['smoking_status_never_smoked'] = v === 'never' ? 1 : 0;
+    answers['smoking_status_smokes'] = v === 'smokes' ? 1 : 0;
+  } else if (key === 'Residence_type') {
+    answers[key] = v === 'urban' ? 1 : 0;
+  } else {
+    answers[key] = v;
+  }
+
+  current++;
+  setTimeout(askQuestion, 500);
+};
+
+async function sendToServer() {
+  const res = await fetch('/predict', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(answers)
+  });
+  const data = await res.json();
+
+  if (data.error) {
+    botMessage("⚠️ Error: " + data.error);
+  } else {
+    const risk = data.result.trim().toLowerCase();
+    botMessage("✅ Result: " + data.result);
+
+    if (risk.includes("low")) {
+      botMessage("💡 *Diet Tip:* Maintain a balanced diet with fruits, vegetables, whole grains, and lean proteins.");
+      botMessage("🏃 *Exercise Tip:* Stay active with at least 30 minutes of moderate exercise five times a week.");
+      botMessage("🩺 Always consult a qualified healthcare professional for personalized advice.");
+    } else if (risk.includes("medium")) {
+      botMessage("💡 *Diet Tip:* Reduce salt, sugar, and fried foods. Focus on whole foods, nuts, and fresh produce.");
+      botMessage("🏃 *Exercise Tip:* Try brisk walking, swimming, or yoga for 45 minutes daily.");
+      botMessage("🩺 Always consult a qualified healthcare professional for personalized advice.");
+    } else if (risk.includes("high")) {
+      botMessage("🚨 Your stroke risk appears HIGH.");
+      botMessage("⚠️ Please consult a doctor or visit the nearest hospital immediately.");
+      botMessage("❗ Do not attempt self-medication or rely on exercise/diet changes until evaluated by a healthcare professional.");
+    } else {
+      botMessage("ℹ️ Keep monitoring your lifestyle and maintain healthy habits!");
+    }
+
+    // Ask user if they want to try again
+    setTimeout(() => {
+      botMessage("Would you like to try again? (Yes / No)");
+      retryMode = true;
+    }, 800);
+  }
+}
+
+// --- Handle Retry ---
+function handleRetry(answer) {
+  if (answer === 'yes') {
+    resetChatbot();
+  } else if (answer === 'no') {
+    botMessage("👋 Thank you for using the Stroke Risk Prediction Chatbot. Stay healthy and take care!");
+    retryMode = false;
+    ended = true;
+  } else {
+    botMessage("⚠️ Please answer Yes or No.");
+  }
+}
+
+// --- Reset chatbot for retry ---
+function resetChatbot() {
+  answers = {};
+  current = 0;
+  retryMode = false;
+  ended = false;
+  setTimeout(askQuestion, 1000);
+}
+
+askQuestion();
+</script>
+<footer style="text-align:center; font-size:13px; color:gray; margin-top:25px; font-family:Arial;">
+ ⚠️ Disclaimer: This chatbot may make mistakes. Please use its results for guidance only — not as medical advice.
+</footer>
+
+</body>
+</html>
